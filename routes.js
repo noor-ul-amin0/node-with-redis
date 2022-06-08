@@ -38,10 +38,31 @@ router
   });
 router
   .route("/:id")
+  .get(async (req, res) => {
+    try {
+      const post = await redisClient.get(`post-${req.params.id}`);
+      if (post) {
+        return res.json(JSON.parse(post));
+      }
+      const response = await api.get(`/post/${req.params.id}`);
+      await redisClient.set(
+        `post-${req.params.id}`,
+        JSON.stringify(response.data),
+        {
+          EX: "3600",
+        }
+      );
+      res.status(200).send(response);
+    } catch (err) {
+      console.log("ERROR OCCURED IN GET POST", err?.response);
+      return res.status(500).send(err?.response);
+    }
+  })
   .put(async (req, res) => {
     try {
-      await redisClient.expire("posts", 1);
       const response = await api.put(`/post/${req.params.id}`, req.body);
+      await redisClient.expire("posts", 1);
+      await redisClient.expire(`post-${req.params.id}`, 1);
       res.status(200).send(response);
     } catch (err) {
       console.log("ERROR OCCURED IN UPDATE POST", err?.response);
@@ -50,8 +71,9 @@ router
   })
   .delete(async (req, res) => {
     try {
-      await redisClient.expire("posts", 1);
       const response = await api.delete(`/post/${req.params.id}`);
+      await redisClient.expire("posts", 1);
+      await redisClient.expire(`post-${req.params.id}`, 1);
       res.status(200).send(response);
     } catch (err) {
       console.log("ERROR OCCURED IN DELETE POST", err?.response);
